@@ -4,6 +4,7 @@ import { MinHeap } from "../utils/Heap";
 import { comprGenChar, comprLZGenerate, comprLZEncode, comprLZDecode } from "../utils/CompressionContracts";
 import { HammingEncode, HammingDecode, HammingEncodeProperly } from "../utils/HammingCodeTools";
 import { filterTruthy } from "../utils/helpers/ArrayHelpers";
+import { DisjointSet } from "../utils/DisjointSet";
 
 /* Function that generates a valid 'data' for a contract type */
 export type GeneratorFunc = () => unknown;
@@ -1902,6 +1903,91 @@ export const codingContractTypesMetadata: ICodingContractTypeMetadata[] = [
         })
         .join("");
       return cipher === ans;
+    },
+  },
+  {
+    name: "Road Rage",
+    desc: (_data: unknown): string => {
+      const data = _data as number[][];
+      return [
+        "You are provided the following elevation data for a rectangular district:\n",
+        `\n[${data.map((line) => "[" + line + "]").join(",\n")}]`,
+        "\n\nYou are tasked with designing a road layout for this district. ",
+        "Any two adjacent locations can be connected together with a road - either vertically or",
+        "horizontally - but the cost of building this road will be the difference of their",
+        "elevations squared.  Steep roads are expensive! ",
+        "You must lay out your roads so that all locations within the grid may be reached, and for",
+        "the lowest possible total cost.",
+        "\n\nDetermine this lowest cost, and return it as a string.",
+        "\n\nFor example:",
+        "\n[[39,46,41,41],                     │ ──┬──",
+        "[40,41,44,45],  yields the roads    └───┼──",
+        "[47,46,45,46],                      ──┬─┴─┐",
+        "[44,44,47,45]]                      ──┘ ──┘",
+        "\n\nand a cost of 59.",
+      ].join(" ");
+    },
+    difficulty: 7,
+    numTries: 10,
+    gen: (): number[][] => {
+      const height = getRandomInt(5, 14);
+      const width = getRandomInt(5, 14);
+
+      function makeHill() {
+        // returns a closure that generates a Gaussian curve  (  e^(-x^2)  )
+        const xPos: number = getRandomInt(-5, width + 5);
+        const yPos: number = getRandomInt(-5, height + 5);
+        const peak_height: number = getRandomInt(15, 35);
+        const peak_width: number = getRandomInt(10, 25);
+        return (x: number, y: number) =>
+          peak_height * Math.exp((-1 / peak_width / peak_width) * (Math.pow(x - xPos, 2) + Math.pow(y - yPos, 2)));
+      }
+      const hills = Array(getRandomInt(2, 4))
+        .fill(0)
+        .map(() => makeHill());
+
+      const grid: number[][] = new Array(height);
+      for (let y = 0; y < height; y += 1) {
+        grid[y] = new Array(width);
+        for (let x = 0; x < width; x += 1) {
+          grid[y][x] = Math.floor(30 + getRandomInt(-3, 3) + hills.reduce((elev, hill) => (elev += hill(x, y)), 0));
+        }
+      }
+
+      return grid;
+    },
+    solver: (_data: unknown, ans: string): boolean => {
+      const grid = _data as number[][];
+      const width = grid[0].length;
+      const height = grid.length;
+      const all_roads = [];
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const index = y * width + x;
+          //horizontal road costs
+          if (x > 0)
+            all_roads.push({
+              cost: Math.pow(grid[y][x] - grid[y][x - 1], 2),
+              nodeA: index,
+              nodeB: index - 1,
+            });
+          //vertical road costs
+          if (y > 0)
+            all_roads.push({
+              cost: Math.pow(grid[y][x] - grid[y - 1][x], 2),
+              nodeA: index,
+              nodeB: index - width,
+            });
+        }
+      }
+      all_roads.sort((a, b) => a.cost - b.cost);
+      let total_cost: number = 0;
+      const disjoint_set = new DisjointSet(width * height);
+      while (disjoint_set.set_count > 1 && all_roads.length > 0) {
+        const cheapest_road = all_roads.shift();
+        if (disjoint_set.meld(cheapest_road!.nodeA, cheapest_road!.nodeB)) total_cost += cheapest_road!.cost;
+      }
+      return parseInt(ans, 10) === Math.floor(total_cost);
     },
   },
 ];
